@@ -1,7 +1,211 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Homework 1 index.html here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+</style>
+<title>CS 184/284A Rasterizer</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+</head>
+
+
+<body>
+
+<h1 align="middle">CS 184/284A: Computer Graphics and Imaging, Spring 2024</h1>
+<h1 align="middle">Homework 1: Rasterizer</h1>
+<h2 align="middle">Juno Lee, Saif Moolji</h2>
+
+<br><br>
+
+    <div>
+
+        <h2 align="middle">Overview</h2>
+        <p>In this homework we implemented rasterization for triangles and texture mapping, as well as antialiasing techniques for both (variations of supersampling and mipmapping and texture sampling algorithms). Specifically, much of our work was done to reduce "jaggies", or aliasing artifacts due to sampling computer objects into (relatively low resolution) screen pixel space. I learned about the importance of solid arithmetic, and having a formula in mind before coding (due to several off-by-one errors). I also have an appreciation for the simplest computer graphics I see in any web png file. </p>
+
+        <h2 align="middle">Section I: Rasterization</h2>
+
+        <h3 align="middle">Part 1: Rasterizing single-color triangles</h3>
+
+        <p>We rasterize triangles using the half-space algorithm discussed in lecture. Specifically, we first delineate a bounding rectangle for the triangle. Then we check each point inside of this box using the 3-line test (for both orientations). Points that pass the test are shaded in.</p>
+
+        <p>Our algorithm is no worse than checking each sample within the bounding box because this is our algorithm. We perform no other checks.</p>
+        <img src="images/q1.png" align="middle" width="800px" />
+        <figcaption align="left">test4.svg</figcaption>
+        <h3>Extra credit</h3>
+        <p>
+            We originally calculated the bounding box by using fractional boundaries:<br />
+            <i>
+                float startx = fmin(std::floor(fmin(fmin(x0, x1), x2)) - 0.5, 0.5);      <br />
+                float endx = std::ceil(fmax(fmax(x0, x1), x2));                          <br />
+                float starty = fmin(std::floor(fmin(fmin(y0, y1), y2)) - 0.5, 0.5);      <br />
+                float endy = std::ceil(fmax(fmax(y0, y1), y2));                          <br />
+            </i>
+            <br />
+            We changed this (originally for readability) to the following:           <br />
+            <i>
+                float startx = fmax(std::floor(fmin(fmin(x0, x1), x2)), 0);              <br />
+                float endx = fmin(std::ceil(fmax(fmax(x0, x1), x2)), width - 1);         <br />
+                float starty = fmax(std::floor(fmin(fmin(y0, y1), y2)), 0);              <br />
+                float endy = fmin(std::ceil(fmax(fmax(y0, y1), y2)), height - 1);        <br />
+            </i>
+            <br />
+            This ended up being much faster. Then we experimented with moving the dX0, dX1, dX2, dY0, dY1, and dY2 calculations outside the for loop. This showed a negligible performance increase. The final code for our section took around 7 milliseconds.
+            <br />
+            <br />
+            <table>
+                <tr><td>Old bounding box + dXi, dYi inside loop</td><td>ELAPSED: 387767000 ns</td></tr>
+                <tr><td>New bounding box + dXi, dYi inside loop</td><td>ELAPSED: 7039900 ns</td></tr>
+                <tr><td>New bounding box + dXi, dYi outside loop</td><td>ELAPSED: 6873000 ns (no signif. change)</td></tr>
+            </table>
+        </p>
+
+        <h3 align="middle">Part 2: Antialiasing triangles</h3>
+
+        <p>
+            We created our supersampling algorithm largely using the built-in sample buffer. We structured this buffer by having each subpixel (x, y, subpixel) correspond to the buffer index (y*width + x)*samplerate + subpixel. We looped through the pixels (in rasterization and subpixel resolution) first, and then for each one we calculated all of the contained subpixels. This let us use this simple indexing formula, and it simplified the logistics, compared to looping through all of the subpixels (e.g. row by row of subpixels). When resolving the subpixels, we just average all of them for each pixel. The coordinate calculations are also straightforward (since we switched our formula a bit from task 1 to make the math simpler). We start at the top left corner of pixels/subpixels, then increment by 0.5 times the length of the subpixel.
+            Supersampling is useful because it lets us have a "middle ground" for edge-case pixels that are barely in the triangle. These become blurred, which people find nicer. Technically, a higher sample rate makes the Nyquist frequency higher, which can reduce artifacts (ugly).
+        </p>
+        <div align="middle">
+            <table style="width=100%">
+                <tr>
+                    <td>
+                        <img src="images/q2.1.png" align="middle" width="400px" />
+                        <figcaption align="middle">test4.svg, sample rate 1</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/q2.2.png" align="middle" width="400px" />
+                        <figcaption align="middle">test4.svg, sample rate 4</figcaption>
+                    </td>
+                </tr>
+                <br />
+                <tr>
+                    <td>
+                        <img src="images/q2.3.png" align="middle" width="400px" />
+                        <figcaption align="middle">test4.svg, sample rate 16</figcaption>
+                    </td>
+                    <td>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <p>The edges are getting blurred, and the transitions are getting smoother. This is because we have more subpixels sampled from, as the rate increases. This allows for smoother gradations, since we have more values and thus a more accurate sample of exactly how much of a pixel lies inside the triangle boundaries. (We can also explain less "jaggies" as due to a higher Nyquist frequency, which reduces these periodic staircase artifacts.)</p>
+
+        <h3 align="middle">Part 3: Transforms</h3>
+        <img src="images/q3.png" align="middle" width="400px" />
+        <figcaption align="left">waving cubeman</figcaption>
+        <p>Cubeman is waving (right arm rotated/translated). We made his head bigger and blue too.</p>
+
+
+        <h2 align="middle">Section II: Sampling</h2>
+
+        <h3 align="middle">Part 4: Barycentric coordinates</h3>
+        <p>Barycentric coordinates are basically shifting the coordinates from "real" to relative to the vertices of the triangle. Specifically, we can define a unique coordinate system using 3 numbers for the closeness of any point, to the vertices A, B, and C - alpha, beta, and gamma. A higher alpha value means a point is closer to the vertex A, and so on for beta and gamma. We can also say that alpha is proportional to the triangle formed by our point, and the other vertices B and C; and so on for beta and gamma. The formula is defined in the code; here is an explanatory picture:</p>
+        <img src="images/q4.png" align="middle" width="400px" />
+        <figcaption align="left">barycentric coords. alpha, beta, gamma are colors</figcaption>
+        <p>The vertices of this triangle are red, blue, and green (I think). Barymetric coordinates are used to average the three colors. So if the red, blue, and green vertices are A, B, and C respectively, then alpha is the "redness" of a vertex, beta is the "blueness", and gamma is the "greenness". As you get closer to a vertex, you have a higher weight on that vertex's color, because the respective barycentric coordinate is increasing (and the others decrease in turn).</p>
+        <img src="images/q4x.png" align="middle" width="400px" />
+        <figcaption align="left">test7.svg, default params</figcaption>
+
+
+        <h3 align="middle">Part 5: "Pixel sampling" for texture mapping</h3>
+        <p>
+            Pixel sampling is essentially sampling pixels from the texture to perform texture mapping from texture space (some texturemap) onto the real screen. We start with real pixels in a real triangle. We then convert to barycentric coordinates, which we use to find the corresponding location in the texturemap triangle. The coordinates in texture space are U,V. We then use some sampling method to find what the right color is, to color the original pixel on the screen that we were working with. <br />
+            Nearest neighbor sampling just takes the color of the nearest neighbor (pixel in the texture map) to U,V. Bilinear sampling actually takes an interpolation (sort of like an average) between the 4 bounding pixels. We do this by interpolating between the two pixels that are parallel to each other, then interpolating a 3rd time between those interpolations. <br />
+            Here are sample comparisons:
+        </p>
+        <!--<img src="images/q5.1.png" align="left" width="400px" />
+    <figcaption align="left">test4.svg, sample rate 16</figcaption>
+    <img src="images/q5.2.png" align="left" width="400px" />
+    <figcaption align="left">test4.svg, sample rate 16</figcaption>
+    <img src="images/q5.3.png" align="left" width="400px" />
+    <figcaption align="left">test4.svg, sample rate 16</figcaption>
+    <img src="images/q5.4.png" align="left" width="400px" />
+    <figcaption align="left">test4.svg, sample rate 16</figcaption>-->
+        <div align="middle">
+            <table style="width=100%">
+                <tr>
+                    <td>
+                        <img src="images/q5.1.png" align="middle" width="400px" />
+                        <figcaption align="middle">NN, sample rate 1</figcaption>
+                    </td>
+                     <td>
+                    <img src="images/q5.2.png" align="middle" width="400px"/>
+                    <figcaption align="middle">NN, sample rate 16</figcaption>
+                  </td>
+                </tr>
+                <br>
+                <tr>
+                  <td>
+                    <img src="images/q5.3.png" align="middle" width="400px"/>
+                    <figcaption align="middle">Bilinear, sample rate 1</figcaption>
+                  </td>
+                  <td>
+                    <img src="images/q5.4.png" align="middle" width="400px"/>
+                    <figcaption align="middle">Bilinear, sample rate 16</figcaption>
+                  </td> 
+                </tr>
+            </table>
+        </div>
+        <p>There are smoother transitions (more colors, producing more intermediate gradations) for bilinear, than for nearest neighbor. This is because we are interpolating between 4 pixels instead of taking 1 pixel value. There will be a large difference between the methods when there is a large color difference very quickly (such as stripes or eye highlights); since then nearest neighbor will pick the different colors while bilinear will try to interpolate them together. (Bilinear may also create a larger color palette, which is desirable/undesirable for different media).</p>
+
+
+        <h3 align="middle">Part 6: "Level sampling" with mipmaps for texture mapping</h3>
+        <p>Level sampling / mipmapping is sampling from mipmaps (downsized versions of the original texturemap). We do this to keep the texture smooth (no jaggies) even when it gets mapped to compressed regions in real screen space. We implemented it through the calculation for level D described in lecture (depends on the rate of change of U and V with respect to X and Y. When they are higher (bigger Jacobian -> more stretched), we use a lower (less detailed) mipmap level and vice versa, according to our formula. This is to mitigate artifacts in these stretched regions. We also changed our algorithm to use either level 0, nearest level, or linear interpolation (just interpolating between two samples) based on LSM.</p>
+        <br />
+        <p>
+            Nearest vs. Bilinear pixel sampling was discussed in task 5. Essentially, bilinear is slower but has better antialiasing power (due to smoothing out colors). Bilinear uses more memory, since it needs to store intermediate values, while nearest neighbor can technically loop through the values without storing them (probably negligible difference). <br /><br />
+            Level sampling is mainly dependent on the transformation of the image, and different levels are used for different cases (e.g. small vs. large screen regions transformed to). However, if we just choose one, higher mipmap levels both take less memory and have higher antialiasing power (with essentially the same speed). This is because they are a lower resolution version of the texture. We normally use multiple levels, so we have to store/compute all of them though. In the general case, the higher our maximum mipmap level is, the more memory and lower speed we have (in exchange for better antialiasing power). Also, L_LINEAR does sampling twice, so it is naturally slower (and retrieves more memory, since it fetches mipmaps from two separate levels). <br /><br />
+            We discussed supersampling before, but
+            the number of samples per pixel takes more memory (for subpixels), more time (because calculations for each subpixel), in exchange for better antialising power.
+
+        </p>
+        <p>
+            Here are pngs transformations of `L_ZERO and P_NEAREST, L_ZERO and P_LINEAR, L_NEAREST and P_NEAREST, as well as L_NEAREST and P_LINEAR`, in respective order:
+        </p>
+        <div align="middle">
+            <table style="width=100%">
+                <tr>
+                    <td>
+                        <img src="images/q6.1.png" align="middle" width="400px" />
+                        <figcaption align="middle">PNG transformation. L_ZERO, P_NEAREST</figcaption>
+                    </td>
+                     <td>
+                <img src="images/q6.2.png" align="middle" width="400px"/>
+                <figcaption align="middle">PNG transformation. L_ZERO, P_LINEAR</figcaption>
+              </td>
+            </tr>
+            <br>
+            <tr>
+              <td>
+                <img src="images/q6.3.png" align="middle" width="400px"/>
+                <figcaption align="middle">PNG transformation. L_NEAREST, P_NEAREST</figcaption>
+              </td>
+              <td>
+                <img src="images/q6.4.png" align="middle" width="400px"/>
+                <figcaption align="middle">PNG transformation. L_NEAREST, P_LINEAR</figcaption>
+              </td> 
+                </tr>
+            </table>
+        </div>
+        <p>L_nearest makes smoother (higher mipmap level, downscaled) images, compared to L_Zero. <br /> P_Linear allows for more gradation, which also improves visibility slightly when there are pixels condensed into a smaller space (in the inner pelvis bone)</p>
+
+
+        <h2 align="middle">Section III: Art Competition</h2>
+        <p>If you are not participating in the optional art competition, don't worry about this section!</p>
+
+        <h3 align="middle">Part 7: Draw something interesting!</h3>
+
+    </div></body>
 </html>
