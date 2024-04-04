@@ -1,7 +1,389 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Homework 4 index.html here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+
+<head>
+  <style>
+    body {
+      padding: 100px;
+      width: 1000px;
+      margin: auto;
+      text-align: left;
+      font-weight: 300;
+      font-family: 'Open Sans', sans-serif;
+      color: #121212;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      font-family: 'Source Sans Pro', sans-serif;
+    }
+  </style>
+  <title>CS 184 Mesh Editor</title>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+  <link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+</head>
+
+
+<body>
+
+  <h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2017</h1>
+  <h1 align="middle">Project 4: Cloth Simulator</h1>
+  <h2 align="middle">Juno Lee, Saif Moolji, CS184-??</h2>
+
+  <br><br>
+
+  <div>
+
+    <h2 align="middle">Overview</h2>
+    <p>We implemented a physics simulator to simulate a cloth (falling, stretching, and folding through internal and external forces). Then we added shaders (simulating lighting/texture effects) to make
+      the cloth look more realistic. Specifically, ideas include the spring-model of particles (to simulate the cloth pulling/stretching on itself); the effects of changing physical properties of the cloth; interactions
+      with both self and other objects (using collisions); and shaders and textures. An important overarching idea is how different parameters (judgment calls for the designer) can drastically affect how 
+      a simulated object behaves--and is therefore perceived (from the "weight" of dense cloths, to the "realism" of self-folding). Moreover, careful choice in these parameters, along with some advanced techniques
+      like certain GLSL shaders, can make a scene feel much more vivid and tangible (e.g. displacement mapping gives the sphere a clear tactile "weight").
+    </p>
+
+    <h2 align="middle">Part I: Masses and springs</h2>
+    <p>Here is the wireframe (all constraints) at a couple angles.</p>
+    <div align="middle">
+      <table style="width:100%">
+        <tr align="center">
+          <td>
+            <img src="images/1_wf1.png" align="middle" width="400px" />
+            <figcaption>cloth wireframe</figcaption>
+          </td>
+          <td>
+            <img src="images/1_wf2.png" align="middle" width="400px" />
+            <figcaption>cloth wireframe, alternate angle</figcaption>
+          </td>
+        </tr>
+      </table>
+    </div>
+    <br>
+    <p>Here it is, with constraints on/off.</p>
+    <div align="middle">
+      <table style="width:100%">
+        <tr align="center">
+          <td>
+            <img src="images/1_wff1.png" align="middle" width="400px"/>
+            <figcaption>without shearing constraints</figcaption>
+          </td>
+          <td>
+            <img src="images/1_wff2.png" align="middle" width="400px"/>
+            <figcaption>only shearing constraints</figcaption>
+          </td>
+        </tr>
+        <tr align="center">
+          <td>
+            <img src="images/1_wff3.png" align="middle" width="400px"/>
+            <figcaption>all constraints</figcaption>
+          </td>
+        </tr>
+      </table>
+    </div>
+  
+  <br><br>
+  <h2 align="middle">Part II</h2>
+  <p>The effects of changing the spring constant ks, amount to making the cloth "bouncier". A high spring constant will
+    make the cloth stiffer, while a lower one will make it more flexible/bouncy. With a very low ks, the cloth will 
+    fall further (the center stretches down more), and it will ripple flexibly. In contrast, a high ks appears to behave
+    more smoothly, and it does not stretch much at all (at rest, it is nearly flat, as opposed to a curved parabolic shape
+    for low ks).
+  </p>
+  <div align="middle">
+    <table style="width:100%">
+      <tr align="center">
+        <td>
+          <img src="images/2_1_1.png" align="middle" width="400px" />
+          <figcaption>high ks. cloth does not ripple, and is nearly flat at rest.</figcaption>
+        </td>
+        <td>
+          <img src="images/2_1_2.png" align="middle" width="400px" />
+          <figcaption>low ks. the center of the cloth "bounces" back up; more rippling/bouncing.</figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <br>
+  <p>Density mainly affects how far the cloth falls. Notably, dense (heavy) cloths will also fall further and come to rest
+    at a more bent position (less dense rests more flatly). When the cloth falls farther, it will have more space to jiggle/bounce.
+    (However, for a vertical cloth, lower density does decrease inertia to the point where it does jiggle/wrinkle more).
+
+  </p>
+  <div align="middle">
+    <table style="width:100%">
+      <tr align="center">
+        <td>
+          <img src="images/2_2_1.png" align="middle" width="400px" />
+          <figcaption>high density. The cloth falls farther (which allows for more expression of wrinkling along 
+            the way).
+          </figcaption>
+        </td>
+        <td>
+          <img src="images/2_2_2.png" align="middle" width="400px" />
+          <figcaption>low density. The cloth bounces a bit, but then it rests close-to-flat.</figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <br>
+  <p>Damping affects both how fast the cloth falls, as well as counteracting minor jiggling/wrinkling. A high damping
+    setting will make it as if the cloth is falling through water (high dissipation of energy kills off temporary spring
+    forces between particles quicker, and the motion is primarily dominated by gravity). A low damping setting will
+    conversely make the cloth fall faster, and also bounce, jiggle, and wrinkle a lot more.
+  </p>
+  <div align="middle">
+    <table style="width:100%">
+      <tr align="center">
+        <td>
+          <img src="images/2_3_1.png" align="middle" width="400px" />
+          <figcaption>high damping. The cloth does not wrinkle/jiggle much as it falls (also falls slower)
+          </figcaption>
+        </td>
+        <td>
+          <img src="images/2_3_2.png" align="middle" width="400px" />
+          <figcaption>low density. The cloth jiggles a lot more (it falls faster, but can come to rest slower because of 
+            excess jiggling).
+          </figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <br>
+  <p>Here is the final resting state:</p>
+  <img src="images/2_f.png" align="middle" width="600px" />
+  <figcaption>Final resting state with default params
+  </figcaption><br>
+  <br><br>
+  <h2 align="middle">Part III</h2>
+  <p>Here are the cloth and sphere with 3 different ks's. Since the ks determines the cloth's flexibility (low ks
+    = more flexible), lower ks cloths drape themselves over the cloth more loosely ("naturally"), while higher ks
+    cloths don't bend fully over the sphere (they touch the sphere a bit less, and rest more widely instead of wrapping
+    around the sphere.)
+  </p>
+  <div align="middle">
+    <table style="width:100%">
+      <tr align="center">
+        <td>
+          <img src="images/3_ks5000.png" align="middle" width="300px" />
+          <figcaption>Default.
+          </figcaption>
+        </td>
+        <td>
+          <img src="images/3_ks500.png" align="middle" width="300px" />
+          <figcaption>low ks(=500). It covers more of the sphere and drapes more flexibly/naturally.</figcaption>
+        </td>
+        <td>
+          <img src="images/3_ks50000.png" align="middle" width="300px" />
+          <figcaption>high ks(=50000). It covers less of the sphere and acts more rigid (like a rubber/plastic sheet?)</figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <br>
+  <p>Here is the cloth on the plane.</p>
+  <img src="images/3_p.png" align="middle" width="600px" />
+  <figcaption>Cloth and plane, default params.
+  </figcaption><br>
+  <br><br>
+
+  <h2 align="middle">Part IV</h2>
+  <p>Here is the cloth falling and folding on itself (default params).</p>
+  <div align="middle">
+    <table style="width:100%">
+      <tr align="center">
+        <td>
+          <img src="images/4_1_1.png" align="middle" width="400px"/>
+          <figcaption>Initial, before playing</figcaption>
+        </td>
+        <td>
+          <img src="images/4_1_2.png" align="middle" width="400px"/>
+          <figcaption>The initial collision causes ripples through the cloth.</figcaption>
+        </td>
+      </tr>
+      <tr align="center">
+        <td>
+          <img src="images/4_1_3.png" align="middle" width="400px"/>
+          <figcaption>The cloth folds on itself as it falls.</figcaption>
+        </td>
+        <td>
+          <img src="images/4_1_4.png" align="middle" width="400px"/>
+          <figcaption>The cloth unfurls on the floor (b/c of repulsions in our model). It continues to unfold even 
+            after this picture.
+          </figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <br>
+  <p>Here are pictures with varying density and ks (unless stated, all parameters are default)</p>
+  <div align="middle">
+    <table style="width:100%">
+      <tr align="center">
+        <td>
+          <img src="images/4_2_1.png" align="middle" width="400px"/>
+          <figcaption>Density=500. Increasing density causes the cloth to fold/crumple on itself more.
+            In other words, the forces of self-collision are relatively weaker.
+          </figcaption>
+        </td>
+        <td>
+          <img src="images/4_2_2.png" align="middle" width="400px"/>
+          <figcaption>Density=1. Contrastively, decreasing density causes the cloth to crumple less 
+            (but it self-folds in a wider, more orderly pattern). The ripples appear less like crumpling
+            and more like waves/undulations.
+          </figcaption>
+        </td>
+      </tr>
+      <tr align="center">
+        <td>
+          <img src="images/4_2_3.png" align="middle" width="400px"/>
+          <figcaption>ks=500. A smaller ks makes the cloth more flexible (less strong interactions between
+            non-colliding particles); but this causes the cloth to bunch/crumple more instead of folding. 
+            This is because the top of the cloth is not really affected much by the crumpling at the bottom; so 
+            the entire cloth falls more or less on the center axis.
+          </figcaption>
+        </td>
+        <td>
+          <img src="images/4_2_4.png" align="middle" width="400px"/>
+          <figcaption>ks=50000. In contrast, a bigger ks causes the cloth to "pull on itself" more tightly. 
+            This results in more folding rather than crumpling. This is because the top of the cloth interacts
+            more with the bottom (it "knows" to fall in a different pattern). (Increasing ks behaves similarly
+            to increasing density.)
+          </figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <br><br>
+  <h2 align="middle">Part V</h2>
+  <p>(1) A shader program is a program that runs efficiently on the GPU to calculate
+    parts of an image/scene's graphics. It can take multiple vectors as input, but it
+    always returns one 4D vector. Vertex shaders often modify individual vertices, as
+    well as processing them and then passing that information (varyings) to the fragment
+    shaders. Fragment shaders operate on fragments (basically, individual pixels, not
+    as big as the antialising "fragments" from earlier in class). They decide (output)
+    the color of the pixel (into out_color). Therefore, vertex shaders process general
+    geometric information, and then we narrow our processing to individual fragments (pixels),
+    which finally decides what color every part of the screen is, with that previous geometry
+    in mind.
+  </p>
+  <p>(2) The Blinn-Phong shading model is a simplification of more detailed lighting
+    algorithms (like raytracing). It consists of an ambient, diffuse, and specular term.
+    In other words, we approximate global lighting as a single ambient term. The diffuse
+    and specular terms also simulate a "bounce" of lighting; the diffuse term simulates
+    the material as a diffuse material that reflects light evenly in every direction (instead of a complex
+     3D or 4D transfer function that custom-varies on input/output angle). The specular
+     term similarly simulates the effect of glossy materials bouncing light based
+     on the incident angle, and the outgoing angle (to the camera/viewer).
+  </p>
+  <div align="middle">
+    <table style="width:100%">
+      <tr align="center">
+        <td>
+          <img src="images/5_2_1.png" align="middle" width="400px"/>
+          <figcaption>Blinn-Phong ambient only (it's dark gray, not black!)
+          </figcaption>
+        </td>
+        <td>
+          <img src="images/5_2_2.png" align="middle" width="400px"/>
+          <figcaption>Blinn-Phong diffuse only
+          </figcaption>
+        </td>
+      </tr>
+      <tr align="center">
+        <td>
+          <img src="images/5_2_3.png" align="middle" width="400px"/>
+          <figcaption>Blinn-Phong specular only
+          </figcaption>
+        </td>
+        <td>
+          <img src="images/5_2_4.png" align="middle" width="400px"/>
+          <figcaption>Blinn-Phong total
+          </figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <br>
+  <p>(3) Here's my custom texture (I scribbled on the default one):</p>
+  <img src="images/5_tex.png" align="middle" width="400px"/>
+  <br>
+  <p>(4) Here are the screenshots of bump and displacement mapping. Bump mapping just draws on shaded textures, but it doesn't change the geometry of the objects. Displacement mapping does change
+    the geometry (moves vertices around, with height based on texture). Displacement mapping looks more realistic, but it may require a finer mesh to look nice (see next section).
+  </p>
+  <div align="middle">
+    <table style="width:100%">
+      <tr align="center">
+        <td>
+          <img src="images/5_4_1.png" align="middle" width="400px"/>
+          <figcaption>Bump mapping on cloth and sphere
+          </figcaption>
+        </td>
+        <td>
+          <img src="images/5_4_2.png" align="middle" width="400px"/>
+          <figcaption>Displacement mapping on sphere (and cloth)
+          </figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <br>
+  <p>Here are screenshots with varying mesh coarsenesses. If we don't have a fine-enough mesh, then the displacement mapping looks odd (not enough resolution to capture the geometry in the texture).
+    With a finer mesh though, we can capture all of the complexity in the mesh, resulting in a much nicer looking image (the brick texture looks more "real", and it is better captured in the sphere's
+    vertex displacements).
+  </p>
+  <div align="middle">
+    <table>
+      <tr align="center">
+        <td>
+          <img src="images/5_4_3.png" align="middle" width="400px"/>
+          <figcaption>Coarseness of -o 16 -a 16 (COARSE)
+          </figcaption>
+        </td>
+        <td>
+          <img src="images/5_4_4.png" align="middle" width="400px"/>
+          <figcaption>Coarseness of -o 128 -a 128 (FINE)
+          </figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <p>Note that for both coarsenesses, bump mapping looks the exact same (it's just a drawn texture, and it doesn't change geometry--so it doesn't rely on our actual sphere mesh to deform).</p>
+  <img src="images/5_4_bump.png" align="middle" width="400px"/>
+  <br>
+  <p>(5) Here are the mirror shader images:</p>
+  <div align="middle">
+    <table>
+      <tr align="center">
+        <td>
+          <img src="images/5_mir.png" align="middle" width="400px"/>
+          <figcaption>Mirror shader on cloth-ball
+          </figcaption>
+        </td>
+        <td>
+          <img src="images/5_mir2.png" align="middle" width="400px"/>
+          <figcaption>Mirror shader on cloth and ball
+          </figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <br>
+  <h9><b>(EC) Extra Credit (Shaders): Rainbow phong mirror shader</b></p>
+  <p>I combined the phong shader with a (dampened) mirror shader to add environmental reflection. Then I tinted this by a color, which is calculated based on the position of the fragment.</p>
+  div align="middle">
+    <table>
+      <tr align="center">
+        <td>
+          <img src="images/ec.png" align="middle" width="400px"/>
+        </td>
+        <td>
+          <img src="images/ec2.png" align="middle" width="400px"/>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+
 </html>
